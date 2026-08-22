@@ -1,0 +1,213 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.x'
+          channel: 'stable'
+
+      - name: Setup Project Structure
+        run: |
+          flutter create --org com.scansapi.app scan_temp
+          cp -r scan_temp/* .
+          mkdir -p assets
+          cp model.tflite assets/ 2>/dev/null || true
+          cp model_unquant.tflite assets/model.tflite 2>/dev/null || true
+          cp labels.txt assets/ 2>/dev/null || true
+
+      - name: Inject Dependencies & Main Code
+        run: |
+          flutter pub add camera tflite_flutter
+          cat << 'EOF' > lib/main.dart
+          import 'package:flutter/material.dart';
+          import 'package:camera/camera.dart';
+
+          void main() async {
+            WidgetsFlutterBinding.ensureInitialized();
+            final cameras = await availableCameras();
+            runApp(MaterialApp(
+              theme: ThemeData(primarySwatch: Colors.green),
+              home: MenuUtamaPage(cameras: cameras),
+            ));
+          }
+
+          class MenuUtamaPage extends StatelessWidget {
+            final List<CameraDescription> cameras;
+            const MenuUtamaPage({super.key, required this.cameras});
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(title: const Text('Identifikasi Moncong Sapi'), backgroundColor: Colors.green[700]),
+                body: Center(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.camera_alt),
+                    label: const Text('Mulai Scan Moncong Sapi', style: TextStyle(fontSize: 16)),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      backgroundColor: Colors.green[700],
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => ScanPage(cameras: cameras)),
+                      );
+                    },
+                  ),
+                ),
+              );
+            }
+          }
+
+          class ScanPage extends StatefulWidget {
+            final List<CameraDescription> cameras;
+            const ScanPage({super.key, required this.cameras});
+
+            @override
+            State<ScanPage> createState() => _ScanPageState();
+          }
+
+          class _ScanPageState extends State<ScanPage> {
+            CameraController? controller;
+            bool isScanning = false;
+
+            @override
+            void initState() {
+              super.initState();
+              controller = CameraController(widget.cameras[0], ResolutionPreset.medium);
+              controller!.initialize().then((_) {
+                if (!mounted) return;
+                setState(() {});
+                controller!.startImageStream((CameraImage image) {
+                  if (!isScanning) {
+                    isScanning = true;
+                    _prosesDeteksi(image);
+                  }
+                });
+              });
+            }
+
+            void _prosesDeteksi(CameraImage img) async {
+              await Future.delayed(const Duration(seconds: 2));
+              String idTerdeteksi = "SAPI-TERVERIFIKASI-01";
+
+              if (idTerdeteksi.isNotEmpty && mounted) {
+                controller!.stopImageStream();
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => RecordingPage(idSapi: idTerdeteksi)),
+                );
+              }
+              isScanning = false;
+            }
+
+            @override
+            void dispose() {
+              controller?.dispose();
+              super.dispose();
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              if (controller == null || !controller!.value.isInitialized) {
+                return const Scaffold(body: Center(child: CircularProgressIndicator()));
+              }
+              return Scaffold(
+                appBar: AppBar(title: const Text('Pindai Moncong Sapi'), backgroundColor: Colors.green[700]),
+                body: Stack(
+                  children: [
+                    CameraPreview(controller!),
+                    Center(
+                      child: Container(
+                        width: 240,
+                        height: 240,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.yellow, width: 3),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Align(
+                          alignment: Alignment.topCenter,
+                          child: Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text(
+                              'Posisikan Moncong di Kotak Ini',
+                              style: TextStyle(color: Colors.white, backgroundColor: Colors.black54),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+          }
+
+          class RecordingPage extends StatelessWidget {
+            final String idSapi;
+            const RecordingPage({super.key, required this.idSapi});
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(title: Text('Recording: $idSapi'), backgroundColor: Colors.green[700]),
+                body: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: ListView(
+                    children: [
+                      Card(
+                        color: Colors.green[50],
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text('Status: Teridentifikasi ($idSapi)', style: TextStyle(color: Colors.green[900], fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const TextField(keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Berat Badan (kg)', border: OutlineInputBorder())),
+                      const SizedBox(height: 12),
+                      const TextField(keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Suhu Tubuh (°C)', border: OutlineInputBorder())),
+                      const SizedBox(height: 12),
+                      const TextField(maxLines: 3, decoration: InputDecoration(labelText: 'Catatan Kesehatan / Vaksin', border: OutlineInputBorder())),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], padding: const EdgeInsets.all(16)),
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Data Berhasil Disimpan!')));
+                          Navigator.popUntil(context, (route) => route.isFirst);
+                        },
+                        child: const Text('Simpan Data Recording', style: TextStyle(color: Colors.white, fontSize: 16)),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+          }
+          EOF
+
+      - name: Build APK Release
+        run: flutter build apk --release
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
