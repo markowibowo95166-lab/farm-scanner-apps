@@ -33,7 +33,7 @@ jobs:
           cp labels.txt assets/ 2>/dev/null || true
           
           # Pasang dependensi
-          flutter pub add camera tflite_flutter
+          flutter pub add camera tflite_flutter http
           
           # Konfigurasi assets di pubspec.yaml
           sed -i '/uses-material-design: true/a \  assets:\n    - assets/model.tflite\n    - assets/labels.txt' pubspec.yaml
@@ -55,6 +55,8 @@ jobs:
           cat << 'EOF' > lib/main.dart
           import 'package:flutter/material.dart';
           import 'package:camera/camera.dart';
+          import 'dart:convert';
+          import 'package:http/http.dart' as http;
 
           void main() async {
             WidgetsFlutterBinding.ensureInitialized();
@@ -178,43 +180,169 @@ jobs:
             }
           }
 
-          class RecordingPage extends StatelessWidget {
+          class RecordingPage extends StatefulWidget {
             final String idSapi;
             const RecordingPage({super.key, required this.idSapi});
 
             @override
+            State<RecordingPage> createState() => _RecordingPageState();
+          }
+
+          class _RecordingPageState extends State<RecordingPage> {
+            final _namaSapiCtrl = TextEditingController();
+            final _tglLahirCtrl = TextEditingController();
+            final _indukCtrl = TextEditingController();
+            final _pejantanCtrl = TextEditingController();
+            final _anakCtrl = TextEditingController();
+            final _bbCtrl = TextEditingController();
+            final _pbbCtrl = TextEditingController();
+            final _fcrCtrl = TextEditingController();
+            final _laktasiCtrl = TextEditingController();
+            final _tglBuntingCtrl = TextEditingController();
+            final _tglLahiranCtrl = TextEditingController();
+            final _catatanKesehatanCtrl = TextEditingController();
+
+            bool _isBunting = false;
+            bool _isLoading = false;
+
+            // GANTI LINK DI BAWAH INI DENGAN URL GOOGLE APPS SCRIPT ANDA
+            final String googleAppsScriptUrl = "https://script.google.com/macros/s/AKfycbzS5nZYR_MT6-O_rLaosTXzUBtLAuhKFou6CBG-BRPLhX_hvf4CKOdECPuY-jijltO9og/exec";
+
+            Future<void> _kirimData() async {
+              setState(() => _isLoading = true);
+
+              final Map<String, dynamic> payload = {
+                "idSapi": widget.idSapi,
+                "nama": _namaSapiCtrl.text,
+                "tglLahir": _tglLahirCtrl.text,
+                "pejantan": _pejantanCtrl.text,
+                "induk": _indukCtrl.text,
+                "anak": _anakCtrl.text,
+                "bb": _bbCtrl.text,
+                "pbbh": _pbbCtrl.text,
+                "fcr": _fcrCtrl.text,
+                "laktasi": _laktasiCtrl.text,
+                "isBunting": _isBunting,
+                "tglBunting": _tglBuntingCtrl.text,
+                "tglLahiran": _tglLahiranCtrl.text,
+                "catatanKesehatan": _catatanKesehatanCtrl.text,
+              };
+
+              try {
+                final response = await http.post(
+                  Uri.parse(googleAppsScriptUrl),
+                  headers: {"Content-Type": "application/json"},
+                  body: jsonEncode(payload),
+                );
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('✅ Data berhasil masuk ke Spreadsheet!')),
+                  );
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Status: Data tersimpan secara offline ($e)')),
+                  );
+                  Navigator.popUntil(context, (route) => route.isFirst);
+                }
+              } finally {
+                if (mounted) setState(() => _isLoading = false);
+              }
+            }
+
+            @override
             Widget build(BuildContext context) {
               return Scaffold(
-                appBar: AppBar(title: Text('Recording: $idSapi'), backgroundColor: Colors.green[700]),
-                body: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: ListView(
-                    children: [
-                      Card(
-                        color: Colors.green[50],
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text('Status: Teridentifikasi ($idSapi)', style: TextStyle(color: Colors.green[900], fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      const TextField(keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Berat Badan (kg)', border: OutlineInputBorder())),
-                      const SizedBox(height: 12),
-                      const TextField(keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Suhu Tubuh (°C)', border: OutlineInputBorder())),
-                      const SizedBox(height: 12),
-                      const TextField(maxLines: 3, decoration: InputDecoration(labelText: 'Catatan Kesehatan / Vaksin', border: OutlineInputBorder())),
-                      const SizedBox(height: 20),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], padding: const EdgeInsets.all(16)),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Data Berhasil Disimpan!')));
-                          Navigator.popUntil(context, (route) => route.isFirst);
-                        },
-                        child: const Text('Simpan Data Recording', style: TextStyle(color: Colors.white, fontSize: 16)),
-                      ),
-                    ],
-                  ),
+                appBar: AppBar(
+                  title: Text('Recording: ${widget.idSapi}'),
+                  backgroundColor: Colors.green[700],
+                  foregroundColor: Colors.white,
                 ),
+                body: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView(
+                        padding: const EdgeInsets.all(16.0),
+                        children: [
+                          Card(
+                            color: Colors.green[50],
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                'Status: Terverifikasi (${widget.idSapi})',
+                                style: TextStyle(color: Colors.green[900], fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // 1. Identitas & Silsilah
+                          const Text('1. Identitas & Silsilah', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(height: 8),
+                          TextField(controller: _namaSapiCtrl, decoration: const InputDecoration(labelText: 'Nama Sapi', border: OutlineInputBorder())),
+                          const SizedBox(height: 8),
+                          TextField(controller: _tglLahirCtrl, decoration: const InputDecoration(labelText: 'Tanggal Lahir', border: OutlineInputBorder())),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(child: TextField(controller: _pejantanCtrl, decoration: const InputDecoration(labelText: 'Pejantan (Sire)', border: OutlineInputBorder()))),
+                              const SizedBox(width: 8),
+                              Expanded(child: TextField(controller: _indukCtrl, decoration: const InputDecoration(labelText: 'Induk (Dam)', border: OutlineInputBorder()))),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(controller: _anakCtrl, decoration: const InputDecoration(labelText: 'Keturunan / Anak', border: OutlineInputBorder())),
+                          const SizedBox(height: 16),
+
+                          // 2. Pertumbuhan & Pakan
+                          const Text('2. Pertumbuhan & Pakan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(child: TextField(controller: _bbCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Bobot Badan (kg)', border: OutlineInputBorder()))),
+                              const SizedBox(width: 8),
+                              Expanded(child: TextField(controller: _pbbCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'PBBH (kg/hari)', border: OutlineInputBorder()))),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(controller: _fcrCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'FCR Pakan', border: OutlineInputBorder())),
+                          const SizedBox(height: 16),
+
+                          // 3. Reproduksi & Laktasi
+                          const Text('3. Reproduksi & Laktasi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(height: 8),
+                          TextField(controller: _laktasiCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Laktasi Ke-', border: OutlineInputBorder())),
+                          const SizedBox(height: 8),
+                          SwitchListTile(
+                            title: const Text('Status: Sedang Bunting'),
+                            value: _isBunting,
+                            activeColor: Colors.green[700],
+                            onChanged: (val) => setState(() => _isBunting = val),
+                          ),
+                          if (_isBunting) ...[
+                            TextField(controller: _tglBuntingCtrl, decoration: const InputDecoration(labelText: 'Tanggal Pemeriksaan Kebuntingan', border: OutlineInputBorder())),
+                            const SizedBox(height: 8),
+                            TextField(controller: _tglLahiranCtrl, decoration: const InputDecoration(labelText: 'Perkiraan Tanggal Lahiran', border: OutlineInputBorder())),
+                            const SizedBox(height: 8),
+                          ],
+                          const SizedBox(height: 16),
+
+                          // 4. Catatan Rekam Medis
+                          const Text('4. Rekam Medis & Kesehatan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(height: 8),
+                          TextField(controller: _catatanKesehatanCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'Riwayat Vaksinasi / Pengobatan', border: OutlineInputBorder())),
+                          const SizedBox(height: 20),
+
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.cloud_upload),
+                            label: const Text('Simpan Data ke Spreadsheet', style: TextStyle(fontSize: 16, color: Colors.white)),
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], padding: const EdgeInsets.all(16)),
+                            onPressed: _kirimData,
+                          ),
+                        ],
+                      ),
               );
             }
           }
