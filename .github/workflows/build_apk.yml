@@ -20,10 +20,10 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.x'
+          flutter-version: '3.19.6'
           channel: 'stable'
 
-      - name: Setup Project Structure
+      - name: Setup Project Structure & Permissions
         run: |
           flutter create --org com.scansapi.app scan_temp
           cp -r scan_temp/* .
@@ -31,10 +31,22 @@ jobs:
           cp model.tflite assets/ 2>/dev/null || true
           cp model_unquant.tflite assets/model.tflite 2>/dev/null || true
           cp labels.txt assets/ 2>/dev/null || true
-
-      - name: Inject Dependencies & Main Code
-        run: |
+          
+          # Pasang dependensi
           flutter pub add camera tflite_flutter
+          
+          # Konfigurasi assets di pubspec.yaml
+          sed -i '/uses-material-design: true/a \  assets:\n    - assets/model.tflite\n    - assets/labels.txt' pubspec.yaml
+          
+          # Set minSdkVersion 21 untuk mendukung library kamera
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle 2>/dev/null || true
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle.kts 2>/dev/null || true
+          
+          # Tambahkan izin kamera di AndroidManifest
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.CAMERA" />' android/app/src/main/AndroidManifest.xml
+
+      - name: Inject Main Code
+        run: |
           cat << 'EOF' > lib/main.dart
           import 'package:flutter/material.dart';
           import 'package:camera/camera.dart';
@@ -204,7 +216,7 @@ jobs:
           EOF
 
       - name: Build APK Release
-        run: flutter build apk --release
+        run: flutter build apk --release --no-tree-shake-icons
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
