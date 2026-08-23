@@ -23,9 +23,8 @@ jobs:
           flutter-version: '3.24.5'
           channel: 'stable'
 
-      - name: Setup Project Structure, Logo & Permissions
+      - name: Setup Project Structure & Permissions
         run: |
-          # 1. Inisialisasi Proyek Baru
           flutter create --org com.scansapi.app scan_temp
           cp -r scan_temp/* .
           mkdir -p assets
@@ -33,33 +32,21 @@ jobs:
           cp model_unquant.tflite assets/model.tflite 2>/dev/null || true
           cp labels.txt assets/ 2>/dev/null || true
           
-          # 2. Pasang Dependensi
           flutter pub add camera tflite_flutter http url_launcher
           flutter pub add --dev flutter_launcher_icons
           
-          # 3. Ganti Nama Aplikasi Menjadi Acow TNK
           APP_NAME="Acow TNK"
           sed -i "s/android:label=\"[^\"]*\"/android:label=\"$APP_NAME\"/g" android/app/src/main/AndroidManifest.xml
           
-          # 4. Ganti Logo Aplikasi (Jika logo.png ada di root repo)
           if [ -f "logo.png" ]; then
             mkdir -p assets/icon
             cp logo.png assets/icon/app_logo.png
-            cat << 'ICON_EOF' >> pubspec.yaml
-
-flutter_launcher_icons:
-  android: "launcher_icon"
-  ios: true
-  image_path: "assets/icon/app_logo.png"
-  min_sdk_android: 21
-ICON_EOF
+            printf "\nflutter_launcher_icons:\n  android: \"launcher_icon\"\n  ios: true\n  image_path: \"assets/icon/app_logo.png\"\n  min_sdk_android: 21\n" >> pubspec.yaml
             dart run flutter_launcher_icons || true
           fi
           
-          # 5. Konfigurasi Assets di pubspec.yaml
           sed -i '/uses-material-design: true/a \  assets:\n    - assets/model.tflite\n    - assets/labels.txt' pubspec.yaml
           
-          # 6. Kunci SDK ke Android 34
           sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle 2>/dev/null || true
@@ -68,7 +55,6 @@ ICON_EOF
           sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle.kts 2>/dev/null || true
           
-          # 7. Tambahkan Izin Kamera & Internet
           sed -i '/<application/i \    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' android/app/src/main/AndroidManifest.xml
 
       - name: Inject Main Code
@@ -133,7 +119,7 @@ ICON_EOF
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                'Acow TNK: Sistem Monitoring Biometrik & Recording Ternak',
+                                'Acow TNK: Monitoring & Recording Ternak',
                                 style: TextStyle(color: Colors.green[900], fontWeight: FontWeight.bold, fontSize: 14),
                               ),
                             ),
@@ -141,7 +127,6 @@ ICON_EOF
                         ),
                       ),
                       const SizedBox(height: 24),
-
                       _buildMenuCard(
                         icon: Icons.camera_alt,
                         color: Colors.green[700]!,
@@ -155,7 +140,6 @@ ICON_EOF
                         },
                       ),
                       const SizedBox(height: 14),
-
                       _buildMenuCard(
                         icon: Icons.pie_chart,
                         color: Colors.teal.shade700,
@@ -169,7 +153,6 @@ ICON_EOF
                         },
                       ),
                       const SizedBox(height: 14),
-
                       _buildMenuCard(
                         icon: Icons.table_chart,
                         color: Colors.blueGrey.shade700,
@@ -376,7 +359,6 @@ ICON_EOF
                               const SizedBox(height: 10),
                               _buildMetricCard('Rata-rata FCR Pakan', _avgFCR.toStringAsFixed(2), Icons.restaurant, Colors.teal),
                               const SizedBox(height: 20),
-
                               const Text('Ringkasan Pencatatan Terakhir', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 10),
                               ..._dataList.take(6).map((data) {
