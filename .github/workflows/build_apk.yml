@@ -33,12 +33,12 @@ jobs:
           cp labels.txt assets/ 2>/dev/null || true
           
           # Pasang dependensi
-          flutter pub add camera tflite_flutter http
+          flutter pub add camera tflite_flutter http url_launcher
           
           # Konfigurasi assets di pubspec.yaml
           sed -i '/uses-material-design: true/a \  assets:\n    - assets/model.tflite\n    - assets/labels.txt' pubspec.yaml
           
-          # Kunci SDK ke Android 34 (mencegah error android-36)
+          # Kunci SDK ke Android 34
           sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 34/g' android/app/build.gradle 2>/dev/null || true
           sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle 2>/dev/null || true
@@ -47,8 +47,8 @@ jobs:
           sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle.kts 2>/dev/null || true
           
-          # Tambahkan izin kamera di AndroidManifest
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.CAMERA" />' android/app/src/main/AndroidManifest.xml
+          # Tambahkan izin KAMERA dan INTERNET di AndroidManifest
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' android/app/src/main/AndroidManifest.xml
 
       - name: Inject Main Code
         run: |
@@ -57,12 +57,20 @@ jobs:
           import 'package:camera/camera.dart';
           import 'dart:convert';
           import 'package:http/http.dart' as http;
+          import 'package:url_launcher/url_launcher.dart';
+
+          const String kAppsScriptUrl = "https://script.google.com/macros/s/AKfycbzY4lmbttYiQNXX0enYcv4ko_FEDyRYBVeZ1VbtUB3vKJjOxsdhE8JbhslRzDgfWSxorw/exec";
+          const String kSpreadsheetUrl = "https://docs.google.com/spreadsheets/d/1tukwDN4yHoxHeQqpEdQQJHtNySmhYO4UEfgnpQrY3g/edit";
 
           void main() async {
             WidgetsFlutterBinding.ensureInitialized();
             final cameras = await availableCameras();
             runApp(MaterialApp(
-              theme: ThemeData(primarySwatch: Colors.green),
+              debugShowCheckedModeBanner: false,
+              theme: ThemeData(
+                primarySwatch: Colors.green,
+                scaffoldBackgroundColor: const Color(0xFFF6F8F6),
+              ),
               home: MenuUtamaPage(cameras: cameras),
             ));
           }
@@ -71,25 +79,336 @@ jobs:
             final List<CameraDescription> cameras;
             const MenuUtamaPage({super.key, required this.cameras});
 
+            Future<void> _bukaSpreadsheet() async {
+              final Uri url = Uri.parse(kSpreadsheetUrl);
+              if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+                throw Exception('Tidak dapat membuka link $url');
+              }
+            }
+
             @override
             Widget build(BuildContext context) {
               return Scaffold(
-                appBar: AppBar(title: const Text('Identifikasi Moncong Sapi'), backgroundColor: Colors.green[700]),
-                body: Center(
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('Mulai Scan Moncong Sapi', style: TextStyle(fontSize: 16)),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                      backgroundColor: Colors.green[700],
-                      foregroundColor: Colors.white,
+                appBar: AppBar(
+                  title: const Text('Smart Cattle Management'),
+                  backgroundColor: Colors.green[800],
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                ),
+                body: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.green[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.analytics, color: Colors.green[800], size: 40),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Sistem Monitoring Biometrik & Recording Ternak Terintegrasi',
+                                style: TextStyle(color: Colors.green[900], fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Menu 1: Scan Moncong Sapi
+                      _buildMenuCard(
+                        icon: Icons.camera_alt,
+                        color: Colors.green[700]!,
+                        title: 'Mulai Scan Moncong Sapi',
+                        subtitle: 'Pindai biometrik moncong untuk identifikasi sapi',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => ScanPage(cameras: cameras)),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Menu 2: Visualisasi & Statistik
+                      _buildMenuCard(
+                        icon: Icons.pie_chart,
+                        color: Colors.teal.shade700,
+                        title: 'Visualisasi & Statistik Data',
+                        subtitle: 'Grafik ringkasan PBBH, Bobot, FCR, dan Reproduksi',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const VisualisasiDataPage()),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Menu 3: Buka Dokumen Spreadsheet
+                      _buildMenuCard(
+                        icon: Icons.table_chart,
+                        color: Colors.blueGrey.shade700,
+                        title: 'Buka Database Spreadsheet',
+                        subtitle: 'Buka dokumen master spreadsheet langsung di Google Drive',
+                        onTap: _bukaSpreadsheet,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            Widget _buildMenuCard({
+              required IconData icon,
+              required Color color,
+              required String title,
+              required String subtitle,
+              required VoidCallback onTap,
+            }) {
+              return Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: onTap,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: color.withOpacity(0.15),
+                          radius: 26,
+                          child: Icon(icon, color: color, size: 28),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                              const SizedBox(height: 4),
+                              Text(subtitle, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                      ],
                     ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => ScanPage(cameras: cameras)),
-                      );
-                    },
+                  ),
+                ),
+              );
+            }
+          }
+
+          class VisualisasiDataPage extends StatefulWidget {
+            const VisualisasiDataPage({super.key});
+
+            @override
+            State<VisualisasiDataPage> createState() => _VisualisasiDataPageState();
+          }
+
+          class _VisualisasiDataPageState extends State<VisualisasiDataPage> {
+            bool _isLoading = true;
+            String? _errorMsg;
+            List<Map<String, dynamic>> _dataList = [];
+
+            int _totalSapi = 0;
+            double _avgBobot = 0.0;
+            double _avgPBBH = 0.0;
+            double _avgFCR = 0.0;
+            int _totalBunting = 0;
+
+            @override
+            void initState() {
+              super.initState();
+              _ambilDataSpreadsheet();
+            }
+
+            Future<void> _ambilDataSpreadsheet() async {
+              setState(() {
+                _isLoading = true;
+                _errorMsg = null;
+              });
+
+              try {
+                final response = await http.get(Uri.parse("$kAppsScriptUrl?action=get_all_recording"));
+                if (response.statusCode == 200) {
+                  final jsonRes = jsonDecode(response.body);
+                  if (jsonRes['status'] == 'success' && jsonRes['data'] != null) {
+                    final List rawData = jsonRes['data'];
+                    _prosesStatistik(rawData);
+                  } else {
+                    setState(() => _errorMsg = jsonRes['pesan'] ?? 'Gagal memproses data.');
+                  }
+                } else {
+                  setState(() => _errorMsg = "Server merespons kode: ${response.statusCode}");
+                }
+              } catch (e) {
+                setState(() => _errorMsg = "Gagal terhubung ke database: $e");
+              } finally {
+                setState(() => _isLoading = false);
+              }
+            }
+
+            void _prosesStatistik(List list) {
+              _dataList = list.map((e) => Map<String, dynamic>.from(e)).toList();
+              _totalSapi = _dataList.length;
+
+              double sumBobot = 0;
+              int countBobot = 0;
+              double sumPBBH = 0;
+              int countPBBH = 0;
+              double sumFCR = 0;
+              int countFCR = 0;
+              int countBunting = 0;
+
+              for (var row in _dataList) {
+                double? bb = double.tryParse(row['bobot']?.toString() ?? '');
+                if (bb != null && bb > 0) {
+                  sumBobot += bb;
+                  countBobot++;
+                }
+
+                double? pbbh = double.tryParse(row['pbbh']?.toString() ?? '');
+                if (pbbh != null && pbbh > 0) {
+                  sumPBBH += pbbh;
+                  countPBBH++;
+                }
+
+                double? fcr = double.tryParse(row['fcr']?.toString() ?? '');
+                if (fcr != null && fcr > 0) {
+                  sumFCR += fcr;
+                  countFCR++;
+                }
+
+                String bunting = row['is_bunting']?.toString().toLowerCase() ?? '';
+                if (bunting.contains('bunting') && !bunting.contains('tidak')) {
+                  countBunting++;
+                }
+              }
+
+              setState(() {
+                _avgBobot = countBobot > 0 ? (sumBobot / countBobot) : 0.0;
+                _avgPBBH = countPBBH > 0 ? (sumPBBH / countPBBH) : 0.0;
+                _avgFCR = countFCR > 0 ? (sumFCR / countFCR) : 0.0;
+                _totalBunting = countBunting;
+              });
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Visualisasi & Statistik Data'),
+                  backgroundColor: Colors.teal.shade800,
+                  foregroundColor: Colors.white,
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: _ambilDataSpreadsheet,
+                    )
+                  ],
+                ),
+                body: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _errorMsg != null
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24.0),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                                  const SizedBox(height: 12),
+                                  Text(_errorMsg!, textAlign: TextAlign.center),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton(
+                                    onPressed: _ambilDataSpreadsheet,
+                                    child: const Text('Coba Lagi'),
+                                  )
+                                ],
+                              ),
+                            ),
+                          )
+                        : ListView(
+                            padding: const EdgeInsets.all(16.0),
+                            children: [
+                              // Grid Metrik Utama
+                              Row(
+                                children: [
+                                  Expanded(child: _buildMetricCard('Total Recording', '$_totalSapi Ekor', Icons.pets, Colors.green)),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: _buildMetricCard('Bunting Aktif', '$_totalBunting Ekor', Icons.pregnant_woman, Colors.pink)),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(child: _buildMetricCard('Rata-rata Bobot', '${_avgBobot.toStringAsFixed(1)} kg', Icons.monitor_weight, Colors.blue)),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: _buildMetricCard('Rata-rata PBBH', '${_avgPBBH.toStringAsFixed(2)} kg/hr', Icons.trending_up, Colors.amber.shade900)),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              _buildMetricCard('Rata-rata FCR Pakan', _avgFCR.toStringAsFixed(2), Icons.restaurant, Colors.teal),
+                              const SizedBox(height: 20),
+
+                              // Visual Distribusi
+                              const Text('Ringkasan Pencatatan Terakhir', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 10),
+                              ..._dataList.take(6).map((data) {
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  child: ListTile(
+                                    leading: CircleAvatar(
+                                      backgroundColor: Colors.green.shade100,
+                                      child: const Icon(Icons.check, color: Colors.green),
+                                    ),
+                                    title: Text('${data['id_sapi']} - ${data['nama'] ?? 'Tanpa Nama'}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    subtitle: Text('Bobot: ${data['bobot']} kg | PBBH: ${data['pbbh']} kg | FCR: ${data['fcr']}'),
+                                    trailing: Chip(
+                                      label: Text(
+                                        data['is_bunting']?.toString().contains('Bunting') == true ? 'Bunting' : 'Normal',
+                                        style: const TextStyle(fontSize: 11, color: Colors.white),
+                                      ),
+                                      backgroundColor: data['is_bunting']?.toString().contains('Bunting') == true ? Colors.pink.shade400 : Colors.green.shade600,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ],
+                          ),
+              );
+            }
+
+            Widget _buildMetricCard(String title, String value, IconData icon, Color color) {
+              return Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 12.0),
+                  child: Row(
+                    children: [
+                      CircleAvatar(backgroundColor: color.withOpacity(0.15), child: Icon(icon, color: color, size: 22)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 11)),
+                            const SizedBox(height: 2),
+                            Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -150,7 +469,7 @@ jobs:
                 return const Scaffold(body: Center(child: CircularProgressIndicator()));
               }
               return Scaffold(
-                appBar: AppBar(title: const Text('Pindai Moncong Sapi'), backgroundColor: Colors.green[700]),
+                appBar: AppBar(title: const Text('Pindai Moncong Sapi'), backgroundColor: Colors.green[700], foregroundColor: Colors.white),
                 body: Stack(
                   children: [
                     CameraPreview(controller!),
@@ -205,48 +524,51 @@ jobs:
             bool _isBunting = false;
             bool _isLoading = false;
 
-            // GANTI LINK DI BAWAH INI DENGAN URL GOOGLE APPS SCRIPT ANDA
-            final String googleAppsScriptUrl = "https://script.google.com/macros/s/AKfycbzS5nZYR_MT6-O_rLaosTXzUBtLAuhKFou6CBG-BRPLhX_hvf4CKOdECPuY-jijltO9og/exec";
-
             Future<void> _kirimData() async {
               setState(() => _isLoading = true);
 
               final Map<String, dynamic> payload = {
-                "idSapi": widget.idSapi,
+                "action": "simpan_recording",
+                "id_sapi": widget.idSapi,
                 "nama": _namaSapiCtrl.text,
                 "tglLahir": _tglLahirCtrl.text,
-                "pejantan": _pejantanCtrl.text,
-                "induk": _indukCtrl.text,
+                "sire": _pejantanCtrl.text,
+                "dam": _indukCtrl.text,
                 "anak": _anakCtrl.text,
-                "bb": _bbCtrl.text,
+                "bobot": _bbCtrl.text,
                 "pbbh": _pbbCtrl.text,
                 "fcr": _fcrCtrl.text,
                 "laktasi": _laktasiCtrl.text,
-                "isBunting": _isBunting,
+                "is_bunting": _isBunting ? "Bunting" : "Tidak Bunting",
                 "tglBunting": _tglBuntingCtrl.text,
                 "tglLahiran": _tglLahiranCtrl.text,
-                "catatanKesehatan": _catatanKesehatanCtrl.text,
+                "medis": _catatanKesehatanCtrl.text,
               };
 
               try {
                 final response = await http.post(
-                  Uri.parse(googleAppsScriptUrl),
+                  Uri.parse(kAppsScriptUrl),
                   headers: {"Content-Type": "application/json"},
                   body: jsonEncode(payload),
                 );
 
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('✅ Data berhasil masuk ke Spreadsheet!')),
+                    const SnackBar(
+                      content: Text('✅ Data berhasil masuk ke Spreadsheet!'),
+                      backgroundColor: Colors.green,
+                    ),
                   );
                   Navigator.popUntil(context, (route) => route.isFirst);
                 }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Status: Data tersimpan secara offline ($e)')),
+                    SnackBar(
+                      content: Text('Status: Gagal kirim ($e)'),
+                      backgroundColor: Colors.red,
+                    ),
                   );
-                  Navigator.popUntil(context, (route) => route.isFirst);
                 }
               } finally {
                 if (mounted) setState(() => _isLoading = false);
@@ -278,7 +600,6 @@ jobs:
                           ),
                           const SizedBox(height: 14),
 
-                          // 1. Identitas & Silsilah
                           const Text('1. Identitas & Silsilah', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           const SizedBox(height: 8),
                           TextField(controller: _namaSapiCtrl, decoration: const InputDecoration(labelText: 'Nama Sapi', border: OutlineInputBorder())),
@@ -296,7 +617,6 @@ jobs:
                           TextField(controller: _anakCtrl, decoration: const InputDecoration(labelText: 'Keturunan / Anak', border: OutlineInputBorder())),
                           const SizedBox(height: 16),
 
-                          // 2. Pertumbuhan & Pakan
                           const Text('2. Pertumbuhan & Pakan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           const SizedBox(height: 8),
                           Row(
@@ -310,7 +630,6 @@ jobs:
                           TextField(controller: _fcrCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'FCR Pakan', border: OutlineInputBorder())),
                           const SizedBox(height: 16),
 
-                          // 3. Reproduksi & Laktasi
                           const Text('3. Reproduksi & Laktasi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           const SizedBox(height: 8),
                           TextField(controller: _laktasiCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Laktasi Ke-', border: OutlineInputBorder())),
@@ -329,7 +648,6 @@ jobs:
                           ],
                           const SizedBox(height: 16),
 
-                          // 4. Catatan Rekam Medis
                           const Text('4. Rekam Medis & Kesehatan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           const SizedBox(height: 8),
                           TextField(controller: _catatanKesehatanCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'Riwayat Vaksinasi / Pengobatan', border: OutlineInputBorder())),
