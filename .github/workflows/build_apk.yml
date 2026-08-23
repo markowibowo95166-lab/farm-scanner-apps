@@ -67,7 +67,7 @@ jobs:
           import 'package:url_launcher/url_launcher.dart';
 
           const String kAppsScriptUrl = "https://script.google.com/macros/s/AKfycbzY4lmbttYiQNXX0enYcv4ko_FEDyRYBVeZ1VbtUB3vKJjOxsdhE8JbhslRzDgfWSxorw/exec";
-          const String kSpreadsheetUrl = "https://docs.google.com/spreadsheets/d/1tukwDN4yHoxHeQqpEdQQJHtNySmhYO4UEfgnpQrY3g/edit";
+          const String kSpreadsheetUrl = "https://docs.google.com/spreadsheets/d/1tukwDN4yHoxHeQqpEdQQ-JHtNySmhYO4UEfgnpQrY3g/edit";
 
           void main() async {
             WidgetsFlutterBinding.ensureInitialized();
